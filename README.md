@@ -14,5 +14,5 @@ gym-super-mario-bros==7.3.0
 
 ## reference
 
-[코드] : https://github.com/wonseokjung/ai_supermario
+[코드] : https://github.com/wonseokjung/ai_supermario  
 논문 : Playing Atari with Deep Reinforcement Learning 2013
