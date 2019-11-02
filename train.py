@@ -37,6 +37,7 @@ movements = [
 
 ## get_ipython().run_line_magic('matplotlib', 'inline')
 
+# gpu 사용 여부
 USE_CUDA = torch.cuda.is_available()
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
 
@@ -57,6 +58,7 @@ for step in range(1000):
 env.close()
 '''
 
+# 학습 진행 결과
 def plot(frame_idx, rewards, losses):
     clear_output(True)
     plt.figure(figsize=(20,5))
@@ -68,7 +70,7 @@ def plot(frame_idx, rewards, losses):
     plt.plot(losses)
     plt.show()
 
-# 논문에서 사용된 84 * 84 GREY SCALE
+# 논문에서 사용된 84 * 84 GREY SCALE (일단 미사용)
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env):
         gym.ObservationWrapper.__init__(self, env)
@@ -87,7 +89,9 @@ class ImageToPytorch(gym.ObservationWrapper):
         super(ImageToPytorch, self).__init__(env)
         old_shape = self.observation_space.shape
         #print(old_shape)
-        self.observation_space = gym.spaces.Box(low = 0.0, high = 1.0, shape = (old_shape[-1], old_shape[0], old_shape[1]), dtype = np.uint8)
+        self.observation_space = gym.spaces.Box(low = 0.0, high = 1.0, # 0 ~ 1 값으로 바꿈)
+                                                shape = (old_shape[-1], old_shape[0], old_shape[1]), 
+                                                dtype = np.uint8)
         #print(self.observation_space.shape)
     def observation(self, observation):
         return np.swapaxes(observation, 2, 0)
@@ -136,12 +140,12 @@ class DQN(nn.Module):
         )
     def forward(self, x):
         x = self.features(x)
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1) # reshape
         x = self.fc(x)
         return x
     def feature_size(self):
         return self.features(autograd.Variable(torch.zeros(1, *self.input_shape))).view(1, -1).size(1)
-    def act(self, state, epsilon):
+    def act(self, state, epsilon): # epsilon-greedy selection
         if random.random() > epsilon:
             with torch.no_grad():
                 state = Variable(torch.FloatTensor(np.float32(state)).unsqueeze(0))
