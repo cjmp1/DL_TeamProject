@@ -165,9 +165,9 @@ model = DQN(env.observation_space.shape, env.action_space.n)
 
 if USE_CUDA:
     model = model.cuda()
-	print("cuda : O")
+    print("cuda : O")
 else:
-	print("cuda : X")
+    print("cuda : X")
 
 optimizer = optim.Adam(model.parameters(), lr = 0.00001)
 
