@@ -34,14 +34,14 @@ movements = [
     ['up'],
 ]
 
-
 ## get_ipython().run_line_magic('matplotlib', 'inline')
 
 # gpu 사용 여부
 USE_CUDA = torch.cuda.is_available()
-Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args, **kwargs)
+Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args,
+                                                                                                                **kwargs)
 
-#print(torch.cuda.get_device_name(0))
+# print(torch.cuda.get_device_name(0))
 
 # random 움직임
 '''
@@ -52,16 +52,15 @@ for step in range(1000):
     action = env.action_space.sample()
     #print(action)
     state, reward, done, info = env.step(action)
-
     env.render()
-
 env.close()
 '''
+
 
 # 학습 진행 결과
 def plot(frame_idx, rewards, losses):
     clear_output(True)
-    plt.figure(figsize=(20,5))
+    plt.figure(figsize=(20, 5))
     plt.subplot(131)
     plt.title('frame %s. reward: %s' % (frame_idx, np.mean(rewards[-10:])))
     plt.plot(rewards)
@@ -70,31 +69,38 @@ def plot(frame_idx, rewards, losses):
     plt.plot(losses)
     plt.show()
 
+
 # 논문에서 사용된 84 * 84 GREY SCALE (일단 미사용)
 class WarpFrame(gym.ObservationWrapper):
     def __init__(self, env):
         gym.ObservationWrapper.__init__(self, env)
         self.width = 84
         self.height = 84
-        self.observation_space = gym.spaces.Box(low = 0, high = 255, shape = (self.height, self.width, 1), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, self.height, self.width), dtype=np.uint8)
 
     def observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
-        return frame[:, :, None]
-        
+        frame = frame[:,:,None]
+        return np.swapaxes(frame,2,0)
+
+
 # image -> gym space 0.0 ~ 1.0 , n * w * rgb -> channel * n * w
 class ImageToPytorch(gym.ObservationWrapper):
     def __init__(self, env):
+        #print(10)
         super(ImageToPytorch, self).__init__(env)
         old_shape = self.observation_space.shape
-        #print(old_shape)
-        self.observation_space = gym.spaces.Box(low = 0.0, high = 1.0, # 0 ~ 1 값으로 바꿈)
-                                                shape = (old_shape[-1], old_shape[0], old_shape[1]), 
-                                                dtype = np.uint8)
-        #print(self.observation_space.shape)
+        # print(old_shape)
+        self.observation_space = gym.spaces.Box(low=0.0, high=1.0,  # 0 ~ 1 값으로 바꿈)
+                                                shape=(old_shape[-1], old_shape[0], old_shape[1]),
+                                                dtype=np.uint8)
+        # print(self.observation_space.shape)
+
     def observation(self, observation):
+        #print(11)
         return np.swapaxes(observation, 2, 0)
+
 
 # (s, a, r) Tuple 집합 생성 replay initial 부터 쌓기 시작 limit size 유지
 class ReplayBuffer(object):
@@ -113,11 +119,14 @@ class ReplayBuffer(object):
     def __len__(self):
         return len(self.buffer)
 
+
 # epsilon greedy 선택을 위한 parameter 초기화
 epsilon_start = 1.0
 epsilon_final = 0.01
 epsilon_decay = 300000
-epsilon_by_frame = lambda frame_idx: epsilon_final + (epsilon_start - epsilon_final) * math.exp(-1. * frame_idx / epsilon_decay)
+epsilon_by_frame = lambda frame_idx: epsilon_final + (epsilon_start - epsilon_final) * math.exp(
+    -1. * frame_idx / epsilon_decay)
+
 
 # 모델 정의
 class DQN(nn.Module):
@@ -126,40 +135,48 @@ class DQN(nn.Module):
         self.input_shape = input_shape
         self.num_actions = num_actions
         self.features = nn.Sequential(
-            nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+            nn.Conv2d(input_shape[0], 16, kernel_size=8, stride=4),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),
+            nn.Conv2d(32, 32, kernel_size=3, stride=1),
             nn.ReLU()
-        ) # feature selection
+        )  # feature selection
         self.fc = nn.Sequential(
             nn.Linear(self.feature_size(), 512),
             nn.ReLU(),
             nn.Linear(512, self.num_actions)
         )
+
     def forward(self, x):
         x = self.features(x)
-        x = x.view(x.size(0), -1) # reshape
+        x = x.view(x.size(0), -1)  # reshape
         x = self.fc(x)
         return x
+
     def feature_size(self):
         return self.features(autograd.Variable(torch.zeros(1, *self.input_shape))).view(1, -1).size(1)
-    def act(self, state, epsilon): # epsilon-greedy selection
+
+    def act(self, state, epsilon):  # epsilon-greedy selection
         if random.random() > epsilon:
             with torch.no_grad():
                 state = Variable(torch.FloatTensor(np.float32(state)).unsqueeze(0))
             q_value = self.forward(state)
             action = q_value.max(1)[1].data[0].item()
-            #print("chosen", action)
+            # print("chosen", action)
         else:
             action = env.action_space.sample()
-            #print("random", action)
+            # print("random", action)
         return action
 
 _env = gym_super_mario_bros.make('SuperMarioBros-v0')
 env = JoypadSpace(_env, movements)
-env = ImageToPytorch(env)
+def MyWrapper(env):
+    return WarpFrame(env)
+
+env = MyWrapper(env)
+
+#print(env.observation_space.shape)
 
 model = DQN(env.observation_space.shape, env.action_space.n)
 
@@ -169,25 +186,27 @@ if USE_CUDA:
 else:
     print("cuda : X")
 
-optimizer = optim.Adam(model.parameters(), lr = 0.00001)
+optimizer = optim.Adam(model.parameters(), lr=0.00001)
 
 replay_initial = 10000
 replay_buffer = ReplayBuffer(500000)
 
 num_frames = 300000
 batch_size = 32
-gamma      = 0.99
+gamma = 0.99
 
 losses = []
 all_rewards = []
 episode_reward = 0
 
-def compute_td_loss(batch_size): # q 함수 정의 및 loss 구하는 함수
+
+
+def compute_td_loss(batch_size):  # q 함수 정의 및 loss 구하는 함수
     state, action, reward, next_state, done = replay_buffer.sample(batch_size)
 
     state = Variable(torch.FloatTensor(np.float32(state)))
     with torch.no_grad():
-        next_state = Variable(torch.FloatTensor(np.float32(next_state))) # no grad tensor 정의
+        next_state = Variable(torch.FloatTensor(np.float32(next_state)))  # no grad tensor 정의
     action = Variable(torch.LongTensor(action))
     reward = Variable(torch.FloatTensor(reward))
     done = Variable(torch.FloatTensor(done))
@@ -197,46 +216,69 @@ def compute_td_loss(batch_size): # q 함수 정의 및 loss 구하는 함수
 
     q_value = q_values.gather(1, action.unsqueeze(1)).squeeze(1)
     next_q_value = next_q_values.max(1)[0]
-    expected_q_value = reward + gamma * next_q_value * (1 - done) # 논문에 정의된 식
+    expected_q_value = reward + gamma * next_q_value * (1 - done)  # 논문에 정의된 식
 
     loss = (q_value - Variable(expected_q_value.data)).pow(2).mean()
 
-    optimizer.zero_grad() # 변화율 0으로
-    loss.backward() # backprop
+    optimizer.zero_grad()  # 변화율 0으로
+    loss.backward()  # backprop
     optimizer.step()
 
     return loss
 
-state = env.reset()
 
-for frame_idx in range(1, num_frames + 1):
-    epsilon = epsilon_by_frame(frame_idx)
-    action = model.act(state, epsilon)
-    #print(action)
-    next_state, reward, done, _ = env.step(action)
-    #print(reward)
-    #env.render()
-    replay_buffer.push(state, action, reward, next_state, done)
 
-    state = next_state
-    episode_reward += reward
+model.load_state_dict(torch.load('saved_model_state.pt'))
+model.eval()
 
-    if done:
-        state = env.reset()
-        all_rewards.append(episode_reward)
-        episode_reward = 0
 
-    if len(replay_buffer) > replay_initial:
-        loss = compute_td_loss(batch_size)
-        losses.append(loss.item())
+'''
+print("Model's state_dict:")
+for param_tensor in model.state_dict():
+    print(param_tensor, "\t", model.state_dict()[param_tensor].size())
 
-    if frame_idx % 1000 == 0:
-        print('frame : %d'%(frame_idx),' ', all_rewards)
-        #plot(frame_idx, all_rewards, losses)
-        #print(np.mean(all_rewards[-10:]))
+# 옵티마이저의 state_dict 출력
+print("Optimizer's state_dict:")
+for var_name in optimizer.state_dict():
+    print(var_name, "\t", optimizer.state_dict()[var_name])
+'''
+trainF = True
+#trainF = False
+
+if trainF == False:
+    state = env.reset()
+    num_frames = 30000
+    for frame_idx in range(1, num_frames + 1):
+        epsilon = epsilon_by_frame(frame_idx)
+        action = model.act(state, epsilon)
+        # print(action)
+        next_state, reward, done, _ = env.step(action)
+        # print(reward)
+        env.render()
+        replay_buffer.push(state, action, reward, next_state, done)
+
+        state = next_state
+        episode_reward += reward
+
+        if done:
+            state = env.reset()
+            all_rewards.append(episode_reward)
+            episode_reward = 0
+
+        if len(replay_buffer) > replay_initial:
+            loss = compute_td_loss(batch_size)
+            losses.append(loss.item())
+
+        if frame_idx % 1000 == 0:
+            print('frame : %d' % (frame_idx), ' ', all_rewards)
+            print('frame : %d' % (frame_idx), ' ', losses)
+            # plot(frame_idx, all_rewards, losses)
+            # print(np.mean(all_rewards[-10:]))
+
+torch.save(model.state_dict(), 'saved_model_state.pt')
 
 # play
-
+'''
 Max_Time = 35000
 Frame_Count = 0
 while Frame_Count < Max_Time:
@@ -244,8 +286,9 @@ while Frame_Count < Max_Time:
     epsilon = 0
     action = model.act(state, epsilon)
     state, reward, done, info = env.step(action)
-    if done :
+    if done:
         print(reward)
         break
     env.render()
     Frame_Count = Frame_Count + 1
+'''
