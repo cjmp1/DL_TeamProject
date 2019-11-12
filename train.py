@@ -19,7 +19,7 @@ from collections import deque
 import cv2
 
 cv2.ocl.setUseOpenCL(False)
-f = open('replay.txt', 'w')
+
 
 movements = [
     ['NOOP'],
@@ -247,18 +247,59 @@ def compute_td_loss(batch_size):  # q 함수 정의 및 loss 구하는 함수
 model.load_state_dict(torch.load('saved_model_state.pt'))
 model.eval()
 
-'''
-print("Model's state_dict:")
-for param_tensor in model.state_dict():
-    print(param_tensor, "\t", model.state_dict()[param_tensor].size())
-# 옵티마이저의 state_dict 출력
-print("Optimizer's state_dict:")
-for var_name in optimizer.state_dict():
-    print(var_name, "\t", optimizer.state_dict()[var_name])
-'''
+with open("losses.txt", "r") as file1:
+    f_list = [float(i) for line in file1 for i in line.split(' ') if i.strip()]
+    for i in range(len(f_list)):
+        losses.append(float(f_list[i]))
+
+with open("rewards.txt","r") as file2:
+    f_list = [float(i) for line in file2 for i in line.split(' ') if i.strip()]
+    for i in range(len(f_list)):
+        all_rewards.append(float(f_list[i]))
+
+with open("replay.txt","r") as file3:
+    line = file3.readline()
+    replay_len = int(line)
+    for i in range(replay_len):
+        temp_state = np.zeros((1, 84, 84))
+        temp_nextstate = np.zeros((1,84,84))
+        line = file3.readline()
+        array = []
+        if line.strip():
+            for x in line.split(' '):
+                if x == '\n':
+                    break
+                array.append(int(x))
+        k = 0
+        for x in range(84):
+            for y in range(84):
+                temp_state[0][x][y] = array[k]
+                k = k + 1
+        temp_action = int(file3.readline())
+        temp_reward = int(file3.readline())
+        line = file3.readline()
+        array = []
+        if line.strip():
+            for x in line.split(' '):
+                if x == '\n':
+                    break
+                array.append(int(x))
+        k = 0
+        for x in range(84):
+            for y in range(84):
+                temp_nextstate[0][x][y] = array[k]
+                k = k + 1
+        dflag = int(file3.readline())
+        if dflag == 1:
+            temp_done = True
+        else:
+            temp_done = False
+        replay_buffer.push(temp_state,temp_action,temp_reward,temp_nextstate,temp_done)
+
+print('Load Complete')
 
 trainF = True
-trainF = False
+# trainF = False
 
 if trainF == False:
     state = env.reset()
@@ -288,20 +329,21 @@ if trainF == False:
             print('frame : %d' % (frame_idx), ' ', all_rewards)
             # plot(frame_idx, all_rewards, losses)
 
-torch.save(model.state_dict(), 'saved_model_state.pt')
+    torch.save(model.state_dict(), 'saved_model_state.pt')
+    f = open('replay.txt', 'w')
+    f.write("%d" % replay_buffer.__len__())
+    f.write('\n')
+    for ho in range(replay_buffer.__len__()):
+        replay_buffer.get_list(ho)
 
-f.write("%d" % replay_buffer.__len__())
-for ho in range(replay_buffer.__len__()):
-    replay_buffer.get_list(ho)
+    with open('losses.txt','w') as lf:
+        for item in losses:
+            lf.write('%f ' % item)
 
-with open('losses.txt','w') as lf:
-    for item in losses:
-        lf.write('%d ' % item)
-
-with open('rewards.txt','w') as rf:
-    for item in all_rewards:
-        rf.write('%d ' % item)
-plt.plot(losses)
+    with open('rewards.txt','w') as rf:
+        for item in all_rewards:
+            rf.write('%d ' % item)
+    plt.plot(losses)
 
 # play
 '''
