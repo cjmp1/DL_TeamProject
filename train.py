@@ -1,3 +1,4 @@
+
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
 import gym_super_mario_bros
@@ -18,6 +19,7 @@ from collections import deque
 import cv2
 
 cv2.ocl.setUseOpenCL(False)
+f = open('replay.txt', 'w')
 
 movements = [
     ['NOOP'],
@@ -118,9 +120,27 @@ class ReplayBuffer(object):
 
     def __len__(self):
         return len(self.buffer)
+    def get_list(self,i):
+        oshape = self.buffer[i][0].shape
+        for i in range(oshape[2]):
+            for j in range(oshape[3]):
+                f.write("%d " % self.buffer[i][0][0][0][i][j])
+        f.write('\n')
+        f.write("%d \n" % self.buffer[i][1])
+        f.write("%d \n" % self.buffer[i][2])
+        nshape = self.buffer[i][3].shape
+        for i in range(nshape[2]):
+            for j in range(nshape[3]):
+                f.write("%d " % self.buffer[i][3][0][0][i][j])
+        f.write('\n')
+        if self.buffer[i][4] == True:
+            f.write('1')
+        else:
+            f.write('0')
+        f.write('\n')
 
 
-# epsilon greedy 선택을 위한 parameter 초기화
+        # epsilon greedy 선택을 위한 parameter 초기화
 epsilon_start = 1.0
 epsilon_final = 0.01
 epsilon_decay = 300000
@@ -199,8 +219,6 @@ losses = []
 all_rewards = []
 episode_reward = 0
 
-
-
 def compute_td_loss(batch_size):  # q 함수 정의 및 loss 구하는 함수
     state, action, reward, next_state, done = replay_buffer.sample(batch_size)
 
@@ -226,28 +244,25 @@ def compute_td_loss(batch_size):  # q 함수 정의 및 loss 구하는 함수
 
     return loss
 
-
-
 model.load_state_dict(torch.load('saved_model_state.pt'))
 model.eval()
-
 
 '''
 print("Model's state_dict:")
 for param_tensor in model.state_dict():
     print(param_tensor, "\t", model.state_dict()[param_tensor].size())
-
 # 옵티마이저의 state_dict 출력
 print("Optimizer's state_dict:")
 for var_name in optimizer.state_dict():
     print(var_name, "\t", optimizer.state_dict()[var_name])
 '''
+
 trainF = True
-#trainF = False
+trainF = False
 
 if trainF == False:
     state = env.reset()
-    num_frames = 30000
+    num_frames = 15000
     for frame_idx in range(1, num_frames + 1):
         epsilon = epsilon_by_frame(frame_idx)
         action = model.act(state, epsilon)
@@ -271,11 +286,22 @@ if trainF == False:
 
         if frame_idx % 1000 == 0:
             print('frame : %d' % (frame_idx), ' ', all_rewards)
-            print('frame : %d' % (frame_idx), ' ', losses)
             # plot(frame_idx, all_rewards, losses)
-            # print(np.mean(all_rewards[-10:]))
 
 torch.save(model.state_dict(), 'saved_model_state.pt')
+
+f.write("%d" % replay_buffer.__len__())
+for ho in range(replay_buffer.__len__()):
+    replay_buffer.get_list(ho)
+
+with open('losses.txt','w') as lf:
+    for item in losses:
+        lf.write('%d ' % item)
+
+with open('rewards.txt','w') as rf:
+    for item in all_rewards:
+        rf.write('%d ' % item)
+plt.plot(losses)
 
 # play
 '''
