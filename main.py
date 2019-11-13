@@ -40,6 +40,8 @@ movements = [
 
 # gpu 사용 여부
 USE_CUDA = torch.cuda.is_available()
+DEVICE = torch.device('cuda' if USE_CUDA else 'cpu')
+
 Variable = lambda *args, **kwargs: autograd.Variable(*args, **kwargs).cuda() if USE_CUDA else autograd.Variable(*args,
                                                                                                                 **kwargs)
 
@@ -244,7 +246,10 @@ def compute_td_loss(batch_size):  # q 함수 정의 및 loss 구하는 함수
 
     return loss
 
-model.load_state_dict(torch.load('saved_model_state.pt'))
+if USE_CUDA:
+    model.load_state_dict(torch.load('saved_model_state.pt'))
+else:
+    model.load_state_dict(torch.load('saved_model_state.pt', map_location=DEVICE))
 model.eval()
 
 with open("losses.txt", "r") as file1:
